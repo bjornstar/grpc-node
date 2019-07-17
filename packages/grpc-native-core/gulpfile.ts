@@ -28,7 +28,6 @@ const srcDir = path.resolve(nativeCoreDir, 'src');
 const testDir = path.resolve(nativeCoreDir, 'test');
 
 const pkg = require('./package');
-const jshintConfig = pkg.jshintConfig;
 
 const clean = () => del([path.resolve(nativeCoreDir, 'build'),
 	                       path.resolve(nativeCoreDir, 'ext/node')]);
@@ -40,14 +39,23 @@ const install = () => {
                {cwd: nativeCoreDir, stdio: 'inherit'});
 };
 
+const cleanGYP = () => {
+  if (!process.env.USERPROFILE) {
+    return Promise.resolve();
+  }
+  return Promise.all([
+    del(path.resolve(process.env.USERPROFILE, '.node-gyp', process.versions.node, 'include/node/openssl'), { force: true }),
+    del(path.resolve(process.env.USERPROFILE, 'AppData/Local/node-gyp/cache', process.versions.node, 'include/node/openssl'), { force: true })
+  ]).then();
+};
+
 const installWindows = () => {
-  return execa('npm', ['install', '--build-from-source'],
-               {cwd: nativeCoreDir, stdio: 'inherit'}).catch(() => 
-del(path.resolve(process.env.USERPROFILE, '.node-gyp', process.versions.node, 'include/node/openssl'), { force: true }).then(() =>
-del(path.resolve(process.env.USERPROFILE, 'AppData/Local/node-gyp/cache', process.versions.node, 'include/node/openssl'), { force: true })).then(() =>
-execa('npm', ['install', '--build-from-source'],
-               {cwd: nativeCoreDir, stdio: 'inherit'})
-               ));
+  return execa('npm', ['install', '--build-from-source'], {cwd: nativeCoreDir, stdio: 'inherit'}).catch(() => {
+    return Promise.all([
+      cleanGYP,
+      execa('npm', ['install', '--build-from-source'], {cwd: nativeCoreDir, stdio: 'inherit'})
+    ]);
+  });
 };
 
 const lint = () => {
@@ -66,7 +74,7 @@ const runTests = () => {
 
 const test = gulp.series(build, runTests);
 
-const docGen = (cb) => {
+const docGen = (cb: any) => {
   var config = require('./jsdoc_conf.json');
   return gulp.src([`${nativeCoreDir}/README.md`, `${nativeCoreDir}/index.js`, `${srcDir}/*.js`], {read: false})
              .pipe(jsdoc(config, cb));

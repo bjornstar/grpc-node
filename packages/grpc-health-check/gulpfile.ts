@@ -20,21 +20,39 @@ import * as mocha from 'gulp-mocha';
 import * as execa from 'execa';
 import * as path from 'path';
 import * as del from 'del';
-import {linkSync} from '../../util';
+import * as fs from 'fs';
+import * as makeDir from 'make-dir';
+
+// synchronously link a module
+const linkSync = (base: string, from: string, to: string) => {
+  from = path.resolve(base, from);
+  to = path.resolve(base, to);
+  try {
+    fs.lstatSync(from);
+    console.log('link: deleting', from);
+    del.sync(from);
+  } catch (e) {
+    makeDir.sync(path.dirname(from));
+  }
+  console.log('link: linking', from, '->', to);
+  fs.symlinkSync(to, from, 'junction');
+};
 
 const healthCheckDir = __dirname;
-const baseDir = path.resolve(healthCheckDir, '..', '..');
 const testDir = path.resolve(healthCheckDir, 'test');
 
 const cleanLinks = () => del(path.resolve(healthCheckDir, 'node_modules/grpc'));
 
 const cleanAll = gulp.parallel(cleanLinks);
 
-const runInstall = () => execa('npm', ['install', '--unsafe-perm'], {cwd: healthCheckDir, stdio: 'inherit'});
+const execNpmVerb = (verb: string, ...args: string[]) =>
+  execa('npm', [verb, ...args], {cwd: healthCheckDir, stdio: 'inherit'});
+
+const runInstall = () => execNpmVerb('install', '--unsafe-perm');
 
 const install = gulp.series(cleanLinks, runInstall);
 
-const linkAdd = (callback) => {
+const linkAdd = (callback: any) => {
   linkSync(healthCheckDir, './node_modules/grpc', '../grpc-native-core');
   callback();
 }
